@@ -1,0 +1,76 @@
+service: tasks-service
+
+frameworkVersion: '3'
+
+provider:
+  name: aws
+  runtime: go1.x
+  profile: serverless-admin
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:DescribeTable
+            - dynamodb:Query
+            - dynamodb:Scan
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:DeleteItem
+          Resource: "arn:aws:dynamodb:*:*:*"
+
+package:
+  patterns:
+    - '!./**'
+    - ./bin/**
+
+functions:
+  authorizer:
+    handler: bin/authorizer
+  list-tasks:
+    handler: bin/list-tasks
+    events:
+      - httpApi:
+          path: /tasks
+          method: get
+  create-task:
+    handler: bin/create-task
+    events:
+      - http:
+          path: /tasks
+          method: post
+          authorizer:
+           name: authorizer
+
+resources:
+  Resources:
+    tasksTable:
+        Type: AWS::DynamoDB::Table
+        Properties:
+          TableName: tasks
+          AttributeDefinitions:
+            - AttributeName: title
+              AttributeType: S
+          KeySchema:
+            - AttributeName: title
+              KeyType: HASH
+          ProvisionedThroughput:
+            ReadCapacityUnits: 1
+            WriteCapacityUnits: 1
+    ElasticSearchInstance:
+      Type: AWS::Elasticsearch::Domain
+      Properties:
+        AdvancedOptions:
+          rest.action.multi.allow_explicit_index: "true"
+        DomainName: "elastic-logs"
+        EBSOptions:
+          EBSEnabled: true
+          VolumeType: gp2
+          VolumeSize: 10
+        ElasticsearchClusterConfig:
+          InstanceType: t2.small.elasticsearch
+          InstanceCount: 1
+          DedicatedMasterEnabled: false
+          ZoneAwarenessEnabled: false
+        ElasticsearchVersion: 7.4
